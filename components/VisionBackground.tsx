@@ -71,13 +71,13 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
 
           // Reactivity: 
           // 1. Bass turns the world Purple/Red (Deep energy)
-          if (audioData.bass > 0.3) {
+          if (audioData.bass > 0.15) {
              r += audioData.bass * 100;
              b += audioData.bass * 50;
           }
 
           // 2. Highs add bright Cyan/White sparks (Electric energy)
-          if (audioData.high > 0.3) {
+          if (audioData.high > 0.25) {
              const spark = Math.sin(value * 10.0 + t * 5.0);
              if (spark > 0.9) {
                 r += 100 * audioData.high;
@@ -96,7 +96,7 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
       ctx.putImageData(imgData, 0, 0);
 
       // Random "Glitch" artifacts on snare/clap (Highs)
-      if (audioData.high > 0.4 && Math.random() > 0.7) {
+      if (audioData.high > 0.25 && Math.random() > 0.7) {
          const sliceHeight = Math.floor(Math.random() * 10);
          const sliceY = Math.floor(Math.random() * (CONFIG.height - sliceHeight));
          const offset = Math.floor((Math.random() - 0.5) * 15); // Horizontal shift

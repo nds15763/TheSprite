@@ -11,6 +11,8 @@ export interface AudioData {
   bass: number; // Low freq (0-1) - Drives Background Pulse
   mid: number;  // Mid freq (0-1) - Drives Fire Shape
   high: number; // High freq (0-1) - Drives Sparks/Glitches
+  energy: number; // Average energy density (0-1) - Genre detection
+  chaos: number; // Rate of change (0-1) - Transient detection
 }
 
 // Residue data generator
@@ -32,7 +34,7 @@ const App: React.FC = () => {
   const [phase, setPhase] = useState<Phase>('IDLE');
   
   // Replaced simple intensity with complex audio data
-  const [audioData, setAudioData] = useState<AudioData>({ vol: 0, bass: 0, mid: 0, high: 0 });
+  const [audioData, setAudioData] = useState<AudioData>({ vol: 0, bass: 0, mid: 0, high: 0, energy: 0, chaos: 0 });
   
   const [fuel, setFuel] = useState(100); // 0-100%
   const [residueText, setResidueText] = useState("");
@@ -53,7 +55,7 @@ const App: React.FC = () => {
         const source = audioCtx.createMediaStreamSource(stream);
         
         source.connect(analyser);
-        analyser.fftSize = 256; // Increased resolution for frequency separation
+        analyser.fftSize = 2048; // Increased resolution for frequency separation
         analyser.smoothingTimeConstant = 0.5; // Snappier response for music
         
         audioContextRef.current = audioCtx;
@@ -82,37 +84,71 @@ const App: React.FC = () => {
     // Frequency Split Calculation
     // 0-255 range for data
     
-    // Bass: Lower 10% of spectrum
+    // Bass: 40Hz - 250Hz (approx bins 2-12 at 48kHz sample rate/2048 fft)
     let bassSum = 0;
-    const bassRange = Math.floor(bufferLength * 0.1);
-    for (let i = 0; i < bassRange; i++) bassSum += dataArrayRef.current[i];
-    const bass = Math.min((bassSum / bassRange) / 255, 1);
+    const bassStart = 2;
+    const bassEnd = 12;
+    const bassCount = bassEnd - bassStart;
+    
+    for (let i = bassStart; i < bassEnd; i++) bassSum += dataArrayRef.current[i];
+    
+    // Boost bass sensitivity
+    const rawBass = (bassSum / bassCount) / 255;
+    const bass = Math.min(rawBass * 2.5, 1);
 
-    // Mids: 10% - 50%
+    // Mids: 250Hz - 2kHz (approx bins 13-100)
     let midSum = 0;
-    const midStart = bassRange;
-    const midRange = Math.floor(bufferLength * 0.4);
-    for (let i = midStart; i < midStart + midRange; i++) midSum += dataArrayRef.current[i];
-    const mid = Math.min((midSum / midRange) / 255, 1);
+    const midStart = 13;
+    const midEnd = 100;
+    const midCount = midEnd - midStart;
+    
+    for (let i = midStart; i < midEnd; i++) midSum += dataArrayRef.current[i];
+    
+    const rawMid = (midSum / midCount) / 255;
+    const mid = Math.min(rawMid * 2.5, 1);
 
-    // Highs: 50% - 100%
+    // Highs: 2kHz+ (approx bins 101+)
     let highSum = 0;
-    const highStart = midStart + midRange;
-    const highRange = bufferLength - highStart;
-    for (let i = highStart; i < bufferLength; i++) highSum += dataArrayRef.current[i];
-    const high = Math.min((highSum / highRange) / 255, 1);
+    const highStart = 101;
+    // We don't need to go all the way to 1024, energy drops off. 
+    // Go to 512 (~10kHz)
+    const highEnd = 512; 
+    const highCount = highEnd - highStart;
+    
+    for (let i = highStart; i < highEnd; i++) highSum += dataArrayRef.current[i];
+    
+    const rawHigh = (highSum / highCount) / 255;
+    const high = Math.min(rawHigh * 3.0, 1); // Highs need more boost usually
+
+    // Energy Density: Average of all bands
+    // We can use the raw sums
+    const totalSum = bassSum + midSum + highSum;
+    const totalCount = bassCount + midCount + highCount;
+    const energy = Math.min((totalSum / totalCount) / 255 * 2.0, 1); // Boosted average
+
+    // Chaos: Transient detection (difference from last frame volume)
+    // We need a ref to store previous volume
+    const prevVol = (animationRef.current as any).prevVol || 0;
+    const currentVol = (bass + mid + high) / 3;
+    let chaos = Math.abs(currentVol - prevVol) * 10.0; // Amplify changes
+    chaos = Math.min(chaos, 1);
+    
+    // Store for next frame
+    (animationRef.current as any).prevVol = currentVol;
 
     // Overall Volume
-    const vol = (bass + mid + high) / 3;
+    const vol = Math.min(currentVol * 2.5, 1);
 
     // React State update
     // We update state for React rendering, but for 60fps canvas, 
     // components might ideally read from a ref, but passing props is okay for this complexity.
     setAudioData({
       vol,
-      bass: bass * 1.2, // Boost bass slightly for visual impact
+      bass,
       mid,
-      high
+      high,
+      energy,
+      chaos
     });
     
     animationRef.current = requestAnimationFrame(updateAudioAnalysis);

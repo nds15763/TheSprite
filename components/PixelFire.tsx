@@ -69,7 +69,7 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
       // If Bass hits hard, spawn more base particles
       if (audioData.bass > 0.4) particleCount += 2;
       // If Highs hit hard (snare/hi-hat), spawn sparky particles
-      if (audioData.high > 0.4) particleCount += 2;
+      if (audioData.high > 0.25) particleCount += 2;
       
       for(let i=0; i<particleCount; i++) {
         const sourceX = width / 2;
