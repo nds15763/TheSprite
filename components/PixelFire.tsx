@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
+import { AudioData } from '../App';
 
 // Configuration for the visual style
 const CONFIG = {
@@ -28,12 +29,12 @@ interface Particle {
 interface PixelFireProps {
   isLit: boolean;
   onLight: () => void;
-  intensity: number; // 0.0 - 1.0 (Audio volume)
+  audioData: AudioData;
   fuelProgress: number; // 0.0 (full) -> 1.0 (empty)
-  lockViewToFire?: boolean; // If true, camera tracks the burning tip
+  lockViewToFire?: boolean; 
 }
 
-const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelProgress, lockViewToFire = false }) => {
+const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelProgress, lockViewToFire = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const frameIdRef = useRef<number>(0);
@@ -41,32 +42,40 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
   const lastPosRef = useRef<{x: number, y: number} | null>(null);
 
   // Initialize Particles
-  const createParticle = (x: number, y: number, intensityMod: number): Particle => ({
-    x,
-    y,
-    // Physics affected by voice intensity
-    vx: (Math.random() - 0.5) * (1.0 + intensityMod * 2), 
-    vy: -1.0 - Math.random() * (2.4 + intensityMod * 3), 
-    life: 1.0 + intensityMod * 0.5,
-    decay: 0.02 + Math.random() * 0.03,
-    // Radius swells with voice
-    radius: (8 + Math.random() * 8) * (1 + intensityMod * 0.5), 
-  });
+  const createParticle = (x: number, y: number, audio: AudioData): Particle => {
+    // Mids (Vocals/Music) drive the vertical speed (Height of flame)
+    const energy = audio.mid; 
+    
+    return {
+      x,
+      y,
+      // X Turbulence is affected by Highs (Flicker)
+      vx: (Math.random() - 0.5) * (1.0 + audio.high * 4), 
+      // Y Speed (Height) affected by Mids
+      vy: -1.0 - Math.random() * (2.0 + energy * 4.5), 
+      life: 1.0 + energy * 0.8,
+      decay: 0.02 + Math.random() * 0.03,
+      // Radius swells with Bass
+      radius: (8 + Math.random() * 8) * (1 + audio.bass * 0.6), 
+    };
+  };
 
   const updateParticles = (ctx: CanvasRenderingContext2D, width: number, height: number, currentTopY: number) => {
-    // If lit, add new particles at the source constantly
     if (isLit && fuelProgress < 0.98) {
-      // Audio boost
-      const particleCount = 3 + Math.floor(intensity * 5);
+      // Base particle count
+      let particleCount = 3;
+      
+      // Music Reactivity: 
+      // If Bass hits hard, spawn more base particles
+      if (audioData.bass > 0.4) particleCount += 2;
+      // If Highs hit hard (snare/hi-hat), spawn sparky particles
+      if (audioData.high > 0.4) particleCount += 2;
       
       for(let i=0; i<particleCount; i++) {
         const sourceX = width / 2;
-        // Emit from slightly below the top to blend with the object
         const sourceY = currentTopY + 5; 
-        
-        // Spread
         const spread = 14 * (1 - fuelProgress * 0.5); 
-        particlesRef.current.push(createParticle(sourceX + (Math.random()-0.5) * spread, sourceY, intensity));
+        particlesRef.current.push(createParticle(sourceX + (Math.random()-0.5) * spread, sourceY, audioData));
       }
     }
 
@@ -76,8 +85,8 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
       p.x += p.vx;
       p.y += p.vy;
       
-      // Turbulent flow (Synesthesia feeling)
-      p.x += Math.sin(p.y * 0.075 + frameIdRef.current * 0.1) * (0.4 + intensity);
+      // Waving motion driven by Mids (Melody)
+      p.x += Math.sin(p.y * 0.075 + frameIdRef.current * (0.1 + audioData.mid * 0.2)) * (0.4 + audioData.mid);
       
       p.life -= p.decay;
       p.radius -= 0.1; 
@@ -101,36 +110,28 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
     const cx = Math.floor(width / 2);
     const startY = height / 2 + 20;
     const stickLength = 100;
-    const stickWidth = 12; // Blocky width
-    const headWidth = 12;  // Matches stick width now
+    const stickWidth = 12; 
+    const headWidth = 12;
 
-    // Stop drawing if completely burnt
     if (fuelProgress >= 1.0) return;
 
     const bottomY = startY + stickLength;
     const headThresholdY = startY + (stickLength * 0.15);
-
-    // Using currentTopY passed from render loop
     const burnY = currentTopY;
 
     // --- Draw Wood Stick ---
     const stickTopY = Math.max(burnY, headThresholdY);
-    
     if (stickTopY < bottomY) {
         const x = cx - stickWidth / 2;
         const h = bottomY - stickTopY;
-        
-        // Main Wood
-        ctx.fillStyle = "#C19A6B"; // Light tan/wood
+        ctx.fillStyle = "#C19A6B";
         ctx.fillRect(x, stickTopY, stickWidth, h);
-
-        // Side Shadow (Right) - Voxel look
-        ctx.fillStyle = "#8B5A2B"; // Darker wood
+        ctx.fillStyle = "#8B5A2B";
         ctx.fillRect(x + stickWidth - 4, stickTopY, 4, h);
         
-        // Burning Tip Highlight (Stick phase)
         if (burnY >= headThresholdY) {
-            ctx.fillStyle = "#FFDD88"; 
+            // The stick burn glow pulsates with Bass
+            ctx.fillStyle = audioData.bass > 0.5 ? "#FFFFFF" : "#FFDD88"; 
             ctx.fillRect(x, stickTopY, stickWidth, 2);
         }
     }
@@ -139,16 +140,12 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
     if (burnY < headThresholdY) {
         const headX = cx - headWidth / 2;
         const currentHeadH = headThresholdY - burnY;
-        
-        // Main Red Block
-        ctx.fillStyle = "#A41212"; // Deep red
+        ctx.fillStyle = "#A41212";
         ctx.fillRect(headX, burnY, headWidth, currentHeadH);
-
-        // Side Shadow (Right)
-        ctx.fillStyle = "#680B0B"; // Darker red
+        ctx.fillStyle = "#680B0B"; 
         ctx.fillRect(headX + headWidth - 4, burnY, 4, currentHeadH);
 
-        // Burning Tip Highlight (Head phase)
+        // Head burn glow
         ctx.fillStyle = "#FFAA00"; 
         ctx.fillRect(headX, burnY, headWidth, 3);
     }
@@ -159,17 +156,15 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
     const data = imageData.data;
     const { colors } = CONFIG;
 
-    // We only scan pixels where we expect fire. Optimization.
-    // But since translation happens, we scan the whole viewport.
-    
+    // React to Volume: If loud, colors shift hotter
+    const shift = audioData.vol > 0.5 ? 20 : 0; 
+
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
 
       if (alpha > 10) {
         let r=0, g=0, b=0;
         let solid = false;
-
-        const shift = intensity > 0.5 ? 20 : 0; 
 
         if (alpha > 200 - shift) { 
           ({ r, g, b } = colors.core);
@@ -184,21 +179,14 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
           ({ r, g, b } = colors.outer);
           solid = true;
         } else if (alpha > 20) { 
-          // Base logic - Purple/Blue aura at the bottom of flame
           const pixelIndex = i / 4;
           const y = Math.floor(pixelIndex / width);
-          
-          // In translated context, we need to map y back relative to currentTopY?
-          // Actually, since we draw the particles relative to logic coordinates, 
-          // and visual output is flat pixels, we can just use visual Y relative to where the flame is visually.
-          // If lockViewToFire is true, the flame base is always at startY.
-          // If false, it's at currentTopY.
-          
           const visualFlameBaseY = lockViewToFire ? (height / 2 + 20) : currentTopY;
           
           if (y > visualFlameBaseY - 15) {
              ({ r, g, b } = colors.base);
-             if (intensity > 0.6) { r = 200; g = 0; b = 255; }
+             // Bass Interaction: If bass is strong, base turns bright neon violet
+             if (audioData.bass > 0.4) { r = 180; g = 50; b = 255; }
           } else {
              ({ r, g, b } = colors.edge);
           }
@@ -215,7 +203,6 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
         }
       }
     }
-
     ctx.putImageData(imageData, 0, 0);
   };
 
@@ -226,121 +213,22 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
     if (!ctx) return;
 
     ctx.clearRect(0, 0, CONFIG.width, CONFIG.height);
-    
-    // Physics Logic
     const startY = CONFIG.height / 2 + 20;
     const stickLength = 100;
-    // Current logical top of the match
     const currentTopY = startY + (stickLength * fuelProgress);
 
-    ctx.save();
-
-    // Camera Follow Logic:
-    // If locked, we translate the world UP so that currentTopY is always rendered at startY.
-    // logicalY - currentTopY + startY = visualY
-    // translate(0, startY - currentTopY)
-    if (lockViewToFire) {
-      const offsetY = startY - currentTopY;
-      ctx.translate(0, offsetY);
-    }
-
-    // 1. Draw Fire Particles (in logical space)
-    updateParticles(ctx, CONFIG.width, CONFIG.height, currentTopY);
-    
-    // 2. Draw Matchstick (in logical space)
-    // Drawn before threshold so it can be behind fire? 
-    // Actually originally it was after to be sharp.
-    // But Threshold works on alpha. Matchstick is solid.
-    // If we draw matchstick first, it might get 'thresholded' if we aren't careful, 
-    // but matchstick uses fillRect (alpha 255), so threshold function just recolors it if we aren't careful.
-    // The previous code drew matchstick AFTER threshold. 
-    // But threshold reads data.
-    // Let's keep drawing Matchstick LAST so it stays sharp and retains its own colors.
-    
-    // We need to apply threshold to particles ONLY.
-    // But threshold scans the whole canvas.
-    // So we draw particles -> Threshold -> Matchstick.
-    
-    // PROBLEM: Threshold uses putImageData. putImageData ignores context translation!
-    // It places pixels directly in device coordinates.
-    // So if we use translate(), get/putImageData works on the *viewport*, not the transformed space.
-    // This is actually GOOD for us. Visual output is what we want to filter.
-    
-    // However, if we translate the particles, they are drawn at Screen Y.
-    // Then getImageData gets Screen pixels.
-    // Then we threshold them.
-    // Then we draw matchstick.
-    
-    // BUT matchstick needs to be drawn with translation too.
-    
-    // Restore context for ImageData? No, ImageData doesn't care about context state.
-    
-    ctx.restore(); // Restore context to default (no translation) for direct pixel manip?
-    // Wait, we need the particles to be drawn WITH translation first.
-    // So the 'save' was for the particle draw.
-    
-    // Actually, let's keep the translation active for drawing particles.
-    // Then restore.
-    // Then 'Apply Threshold' reads the canvas (which now has particles at the correct visual spot).
-    // Then 'Draw Matchstick'. But Matchstick needs to be at the correct visual spot too.
-    
-    // Refined Order:
-    // 1. ctx.save(); ctx.translate(...); drawParticles(); ctx.restore();
-    // 2. applyThreshold() -> Processes visual pixels.
-    // 3. ctx.save(); ctx.translate(...); drawMatchstick(); ctx.restore();
-    
     // 1. Draw Particles
     ctx.save();
     if (lockViewToFire) {
        ctx.translate(0, (startY - currentTopY));
     }
-    // Note: updateParticles renders to canvas.
-    // We pass ctx.
-    // But updateParticles computes physics. Physics should be persistent?
-    // Particles have x,y state.
-    // If we use translate, we are moving the *camera*.
-    // The particles exist in World Space.
-    // So we just translate the camera (ctx) before drawing.
-    // But updateParticles currently does physics AND drawing.
-    // We should separate them or just rely on the fact that ctx is passed.
-    
-    // We need to decouple update from draw in updateParticles loop?
-    // No, standard particle systems update & draw in one loop for efficiency in small demos.
-    // But here, 'draw' uses ctx.arc().
-    // So if ctx is translated, arc is drawn translated.
-    // Physics (p.x, p.y) remains in World Space. This is correct.
-    // BUT we check 'isLit' inside to spawn new particles.
-    // Spawning should use World Space source (currentTopY). Correct.
-    
-    // One edge case: ClearRect.
-    // We cleared at 0,0. That's fine.
-    
-    // Execute Part 1
-    // We need to manually draw particles here or change the function signature?
-    // updateParticles does physics updates. It modifies ref state.
-    // We must only call updateParticles ONCE per frame.
-    // So we can't separate easily without refactoring.
-    // That's fine. The ctx is transformed.
-    // wait... updateParticles spawns at 'currentTopY'.
-    // If ctx is translated up by 'startY - currentTopY'.
-    // A particle spawned at 'currentTopY' will be drawn at 'startY'.
-    // This is exactly what we want (Visual lock).
-    
-    // Wait, updateParticles spawns particles and *adds them to array*.
-    // Then it iterates array and draws.
-    // This is fine.
-    
-    // Call Particles (Draws to canvas)
-    // We pass currentTopY to use as emitter source.
     updateParticles(ctx, CONFIG.width, CONFIG.height, currentTopY);
     ctx.restore();
 
-    // 2. Threshold (Visual Post-process)
-    // This works on whatever is on the canvas (the translated particles).
+    // 2. Post-Process
     applyThreshold(ctx, CONFIG.width, CONFIG.height, currentTopY);
     
-    // 3. Matchstick
-    // Needs same translation
+    // 3. Draw Matchstick
     ctx.save();
     if (lockViewToFire) {
        ctx.translate(0, (startY - currentTopY));
@@ -349,22 +237,20 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, intensity, fuelPr
     ctx.restore();
 
     frameIdRef.current = requestAnimationFrame(render);
-  }, [isLit, intensity, fuelProgress, lockViewToFire]);
+  }, [isLit, audioData, fuelProgress, lockViewToFire]);
 
   useEffect(() => {
     frameIdRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameIdRef.current);
   }, [render]);
 
-  // Swipe Logic (Keep logic in Screen/Canvas space, simpler)
+  // Input Handling
   const checkIgnition = (x: number, y: number) => {
       if (isLit) return;
       const matchHeadX = CONFIG.width / 2;
       const matchHeadY = CONFIG.height / 2 + 20;
       const dist = Math.sqrt(Math.pow(x - matchHeadX, 2) + Math.pow(y - matchHeadY, 2));
-      if (dist < 40) {
-          onLight();
-      }
+      if (dist < 40) onLight();
   };
 
   const getCanvasCoordinates = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {

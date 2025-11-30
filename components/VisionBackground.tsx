@@ -1,20 +1,21 @@
 import React, { useRef, useEffect } from 'react';
+import { AudioData } from '../App';
 
 interface VisionBackgroundProps {
-  intensity: number; // 0 to 1, driven by audio volume
+  audioData: AudioData; 
   isActive: boolean;
 }
 
-const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive }) => {
+const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timeRef = useRef<number>(0);
   const frameIdRef = useRef<number>(0);
 
   // Configuration for the "Dream Emulator" look
   const CONFIG = {
-    width: 60,   // Extremely low res for that jagged PS1/LSD look
+    width: 60,   
     height: 80,
-    scale: 8,    // Scale up massively
+    scale: 8,    
   };
 
   useEffect(() => {
@@ -25,7 +26,6 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive
 
     const render = () => {
       if (!isActive) {
-        // Fade to black slowly if inactive
         ctx.fillStyle = 'rgba(9, 9, 11, 0.1)';
         ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
         if (Math.random() > 0.9) { 
@@ -34,51 +34,56 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive
         return;
       }
 
-      timeRef.current += 0.02 + (intensity * 0.1); // Time speeds up with voice
+      // Music Reactivity Logic:
+      // Time flows faster with Mids (Melody speed)
+      timeRef.current += 0.02 + (audioData.mid * 0.15); 
       const t = timeRef.current;
       
       const imgData = ctx.getImageData(0, 0, CONFIG.width, CONFIG.height);
       const data = imgData.data;
 
-      // "Plasma" fluid algorithm
       for (let x = 0; x < CONFIG.width; x++) {
         for (let y = 0; y < CONFIG.height; y++) {
           const index = (x + y * CONFIG.width) * 4;
 
-          // Normalized coordinates
           const u = x / CONFIG.width;
           const v = y / CONFIG.height;
 
-          // Warping logic based on intensity (The "Drugcore" warping)
-          const warp = intensity * 10.0;
+          // Bass distorts the space (The "Thump")
+          // If Bass > 0.5, the warp factor jumps
+          const bassWarp = audioData.bass * 20.0;
           
-          // Calculate plasma value
-          // Base movement
           let value = Math.sin(u * 5.0 + t);
           value += Math.sin((v * 5.0 + t) * 0.5);
           value += Math.sin((u + v + t) * 2.0);
-          // Circular movement
+          
           const cx = u + 0.5 * Math.sin(t * 0.3);
           const cy = v + 0.5 * Math.cos(t * 0.2);
-          value += Math.sin(Math.sqrt(cx*cx + cy*cy + 1.0) * (5.0 + warp));
-
-          // Map value (-4 to 4) to colors
-          // Theme: "Blue Night" (calm) -> "Neon/Negative" (intense)
           
-          // Base Color (Deep Blue/Purple - Subconscious)
+          // The core fluid formula
+          value += Math.sin(Math.sqrt(cx*cx + cy*cy + 1.0) * (5.0 + bassWarp));
+
+          // Color Mapping
+          // Base: Deep Blue
           let r = 20 + Math.sin(value + t) * 20;
           let g = 10 + Math.cos(value + t) * 10;
           let b = 60 + Math.sin(value + t * 0.5) * 40;
 
-          // Reactivity: Inject Chaos colors when speaking
-          if (intensity > 0.05) {
-             // Add "Neon" layers based on voice volume
-             const chaos = Math.min(intensity * 2, 1); // amplify effect
-             
-             // Flash Red/Magenta/Cyan
-             r += Math.sin(value * 3.0) * 150 * chaos;
-             g += Math.cos(value * 5.0) * 100 * chaos;
-             b += Math.sin(value * 2.0 + t) * 100 * chaos;
+          // Reactivity: 
+          // 1. Bass turns the world Purple/Red (Deep energy)
+          if (audioData.bass > 0.3) {
+             r += audioData.bass * 100;
+             b += audioData.bass * 50;
+          }
+
+          // 2. Highs add bright Cyan/White sparks (Electric energy)
+          if (audioData.high > 0.3) {
+             const spark = Math.sin(value * 10.0 + t * 5.0);
+             if (spark > 0.9) {
+                r += 100 * audioData.high;
+                g += 150 * audioData.high;
+                b += 200 * audioData.high;
+             }
           }
 
           data[index] = r;
@@ -90,15 +95,19 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive
 
       ctx.putImageData(imgData, 0, 0);
 
-      // Random "Glitch" artifacts (Data Moshing effect)
-      if (intensity > 0.4 && Math.random() > 0.8) {
+      // Random "Glitch" artifacts on snare/clap (Highs)
+      if (audioData.high > 0.4 && Math.random() > 0.7) {
          const sliceHeight = Math.floor(Math.random() * 10);
          const sliceY = Math.floor(Math.random() * (CONFIG.height - sliceHeight));
-         const offset = Math.floor((Math.random() - 0.5) * 10);
+         const offset = Math.floor((Math.random() - 0.5) * 15); // Horizontal shift
+         
+         // RGB Split effect for glitch
+         ctx.globalCompositeOperation = 'screen';
          ctx.drawImage(canvas, 
             0, sliceY, CONFIG.width, sliceHeight, 
             offset, sliceY, CONFIG.width, sliceHeight
          );
+         ctx.globalCompositeOperation = 'source-over';
       }
 
       frameIdRef.current = requestAnimationFrame(render);
@@ -107,7 +116,7 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive
     render();
 
     return () => cancelAnimationFrame(frameIdRef.current);
-  }, [isActive, intensity]);
+  }, [isActive, audioData]);
 
   return (
     <div 
@@ -121,7 +130,6 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ intensity, isActive
         className="w-full h-full object-cover"
         style={{ imageRendering: 'pixelated' }}
       />
-      {/* Overlay vignette to keep focus on center (The Anchor) */}
       <div className="absolute inset-0 bg-radial-gradient from-transparent via-zinc-950/50 to-zinc-950" />
     </div>
   );

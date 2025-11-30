@@ -5,6 +5,14 @@ import VisionBackground from './components/VisionBackground';
 // Types of experience phases
 type Phase = 'IDLE' | 'BURNING' | 'RESIDUE';
 
+// Detailed Audio Data structure
+export interface AudioData {
+  vol: number;  // Overall volume (0-1)
+  bass: number; // Low freq (0-1) - Drives Background Pulse
+  mid: number;  // Mid freq (0-1) - Drives Fire Shape
+  high: number; // High freq (0-1) - Drives Sparks/Glitches
+}
+
 // Residue data generator
 const generateResidue = () => {
   const phrases = [
@@ -22,7 +30,10 @@ const generateResidue = () => {
 
 const App: React.FC = () => {
   const [phase, setPhase] = useState<Phase>('IDLE');
-  const [audioIntensity, setAudioIntensity] = useState(0);
+  
+  // Replaced simple intensity with complex audio data
+  const [audioData, setAudioData] = useState<AudioData>({ vol: 0, bass: 0, mid: 0, high: 0 });
+  
   const [fuel, setFuel] = useState(100); // 0-100%
   const [residueText, setResidueText] = useState("");
   
@@ -42,7 +53,8 @@ const App: React.FC = () => {
         const source = audioCtx.createMediaStreamSource(stream);
         
         source.connect(analyser);
-        analyser.fftSize = 64; // Low res for performance
+        analyser.fftSize = 256; // Increased resolution for frequency separation
+        analyser.smoothingTimeConstant = 0.5; // Snappier response for music
         
         audioContextRef.current = audioCtx;
         analyserRef.current = analyser;
@@ -65,16 +77,43 @@ const App: React.FC = () => {
     
     analyserRef.current.getByteFrequencyData(dataArrayRef.current);
     
-    // Calculate average volume (simple intensity)
-    let sum = 0;
-    for (let i = 0; i < dataArrayRef.current.length; i++) {
-      sum += dataArrayRef.current[i];
-    }
-    const avg = sum / dataArrayRef.current.length;
-    const normalized = Math.min(avg / 128, 1); // Normalize 0-1
+    const bufferLength = dataArrayRef.current.length;
     
-    // Smooth dampening
-    setAudioIntensity(prev => prev * 0.8 + normalized * 0.2);
+    // Frequency Split Calculation
+    // 0-255 range for data
+    
+    // Bass: Lower 10% of spectrum
+    let bassSum = 0;
+    const bassRange = Math.floor(bufferLength * 0.1);
+    for (let i = 0; i < bassRange; i++) bassSum += dataArrayRef.current[i];
+    const bass = Math.min((bassSum / bassRange) / 255, 1);
+
+    // Mids: 10% - 50%
+    let midSum = 0;
+    const midStart = bassRange;
+    const midRange = Math.floor(bufferLength * 0.4);
+    for (let i = midStart; i < midStart + midRange; i++) midSum += dataArrayRef.current[i];
+    const mid = Math.min((midSum / midRange) / 255, 1);
+
+    // Highs: 50% - 100%
+    let highSum = 0;
+    const highStart = midStart + midRange;
+    const highRange = bufferLength - highStart;
+    for (let i = highStart; i < bufferLength; i++) highSum += dataArrayRef.current[i];
+    const high = Math.min((highSum / highRange) / 255, 1);
+
+    // Overall Volume
+    const vol = (bass + mid + high) / 3;
+
+    // React State update
+    // We update state for React rendering, but for 60fps canvas, 
+    // components might ideally read from a ref, but passing props is okay for this complexity.
+    setAudioData({
+      vol,
+      bass: bass * 1.2, // Boost bass slightly for visual impact
+      mid,
+      high
+    });
     
     animationRef.current = requestAnimationFrame(updateAudioAnalysis);
   };
@@ -90,22 +129,16 @@ const App: React.FC = () => {
              setResidueText(generateResidue());
              return 0;
           }
-          // Burn rate calculation for ~3 minutes duration
-          // 3 minutes = 180 seconds = 180,000 ms
-          // Update interval = 50 ms
-          // Total ticks = 180,000 / 50 = 3600 ticks
-          // Base consumption = 100 fuel / 3600 ticks ≈ 0.028 fuel/tick
-          
           const baseBurn = 0.028;
-          // Voice accelerates burning up to 3x speed, creating dynamic time dilation
-          const burnRate = baseBurn * (1 + audioIntensity * 2); 
+          // Burning reacts to overall volume intensity
+          const burnRate = baseBurn * (1 + audioData.vol * 2); 
           
           return prev - burnRate;
         });
       }, 50);
     }
     return () => clearInterval(interval);
-  }, [phase, audioIntensity]);
+  }, [phase, audioData.vol]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -119,23 +152,19 @@ const App: React.FC = () => {
     setPhase('BURNING');
     setFuel(100);
     startAudioListener();
-    // Trigger haptic if available
     if (navigator.vibrate) navigator.vibrate(50);
   };
 
   const handleRestart = () => {
     setPhase('IDLE');
     setFuel(100);
-    setAudioIntensity(0);
+    setAudioData({ vol: 0, bass: 0, mid: 0, high: 0 });
   };
 
   // Helper for dynamic transforms
   const getTransformClass = () => {
     if (phase === 'RESIDUE') return 'scale-50 opacity-0';
     if (phase === 'BURNING') {
-       // Updated Zoom and Position:
-       // Scale 1.05: Reduced from 1.3 to zoom out slightly (further away)
-       // Translate Y 32vh: Raised from 45vh so the bottom of the flame (blue/purple base) is fully visible
        return 'scale-[1.05] translate-y-[32vh]'; 
     }
     return 'scale-100 translate-y-0 opacity-100'; // IDLE
@@ -145,9 +174,8 @@ const App: React.FC = () => {
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-zinc-950 overflow-hidden select-none touch-none">
       
       {/* 1. Vision Background (The Subconscious) */}
-      {/* Stays mounted but fades in/out based on phase */}
       <VisionBackground 
-        intensity={audioIntensity} 
+        audioData={audioData} 
         isActive={phase === 'BURNING'} 
       />
 
@@ -159,7 +187,7 @@ const App: React.FC = () => {
            <PixelFire 
               isLit={phase === 'BURNING'} 
               onLight={handleIgnite}
-              intensity={audioIntensity}
+              audioData={audioData}
               fuelProgress={1 - (fuel / 100)}
               lockViewToFire={phase === 'BURNING'}
            />
@@ -178,10 +206,9 @@ const App: React.FC = () => {
         {phase === 'RESIDUE' && (
            <div className="absolute inset-0 flex items-center justify-center">
               <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-xs text-center animate-fade-in shadow-2xl transform rotate-1">
-                 {/* Capture the 'vibe' of the trip */}
                  <div className="w-full h-32 bg-zinc-950 mb-6 overflow-hidden relative">
-                    {/* A static slice of the vision */}
-                    <VisionBackground intensity={0.8} isActive={true} />
+                    {/* Residue snapshot uses current audio mood */}
+                    <VisionBackground audioData={{vol: 0.5, bass: 0.8, mid: 0.2, high: 0.1}} isActive={true} />
                     <div className="absolute inset-0 bg-black/20" />
                  </div>
                  
