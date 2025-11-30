@@ -17,7 +17,14 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          // 强制所有 'three' 的导入都指向 node_modules 下的同一个包
+          'three': path.resolve(__dirname, 'node_modules/three'),
+          'three-stdlib': path.resolve(__dirname, 'node_modules/three-stdlib')
         }
+      },
+      optimizeDeps: {
+        // 预构建这些包，避免 CommonJS/ESM 混用导致的重复加载
+        include: ['three', 'three-stdlib', '@react-three/fiber', '@react-three/drei']
       }
     };
 });

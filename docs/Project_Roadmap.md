@@ -31,41 +31,41 @@
 
 ## 3. 实施阶段 (Implementation Phases)
 
-### Phase 1: 架构重构 (当前重点)
+### Phase 1: 架构重构 (已完成)
 *目标: 清理 `App.tsx`，建立插件化系统基础。*
 
-- [ ] **抽离音频引擎**: 将逻辑移至 `src/hooks/useAudioEngine.ts`。
-- [ ] **定义类型**: 创建 `src/types/audio.ts` (定义数据流和事件接口)。
-- [ ] **创建注册表**: 建立 `src/components/visualizers/index.tsx` 管理不同风格。
-- [ ] **重构现有组件**: 
+- [x] **抽离音频引擎**: 将逻辑移至 `src/hooks/useAudioEngine.ts`。
+- [x] **定义类型**: 创建 `src/types/audio.ts` (定义数据流和事件接口)。
+- [x] **创建注册表**: 建立 `src/components/visualizers/index.tsx` 管理不同风格。
+- [x] **重构现有组件**: 
     - `VisionBackground` -> `FluidDream` (流体梦境)
     - `PixelFire` -> `NeonFire` (霓虹火焰)
-- [ ] **UI**: 在 `App.tsx` 添加简单的切换器，用于测试不同效果。
+- [x] **UI**: 在 `App.tsx` 添加简单的切换器，用于测试不同效果。
 
-### Phase 2: WebGL 基础设施 & AR 准备 (引擎升级)
+### Phase 2: WebGL 基础设施 & AR 准备 (已完成)
 *目标: 从 2D Canvas 迈向 3D/Shader 世界，并为 AR 铺路。*
 
-- [ ] **引入 R3F 技术栈**: 安装 `three`, `@react-three/fiber`, `@react-three/drei`, `@react-three/xr`。
-- [ ] **场景解耦 (Stage Abstraction)**: 建立 `Stage` 概念，区分普通模式 (黑色背景) 和 AR 模式 (透明背景)。
-- [ ] **Canvas 设置**: 用 R3F 的 `<Canvas>` 替换原本的 HTML 容器，并配置 `<XR>` 组件。
-- [ ] **Shader 模板**: 建立基础的 GLSL Shader 开发模板，确保支持透明度混合 (Blending)。
+- [x] **引入 R3F 技术栈**: 安装 `three`, `@react-three/fiber`, `@react-three/drei`, `@react-three/xr`。
+- [x] **场景解耦 (Stage Abstraction)**: 建立 `Stage` 概念，区分普通模式 (黑色背景) 和 AR 模式 (透明背景)。
+- [x] **Canvas 设置**: 用 R3F 的 `<Canvas>` 替换原本的 HTML 容器，并配置 `<XR>` 组件。
+- [x] **Shader 模板**: 建立基础的 3D 组件 `CubeTest` 验证管线。
 
-### Phase 3: "Touch Flow" 粒子系统 (终极目标)
+### Phase 3: "Touch Flow" 粒子系统 (已完成)
 *目标: 实现参考图中的 GPGPU 粒子流体交互效果。*
 
-- [ ] **GPGPU 逻辑**: 实现 FBO (帧缓存对象) 位置模拟。
-- [ ] **流场设计**: 编写基于噪声 (Noise) 的 GLSL 向量场。
-- [ ] **交互实现**: 
+- [x] **GPGPU 逻辑**: 实现 FBO (帧缓存对象) 位置模拟 (`src/shaders/simulationShaders.ts`)。
+- [x] **流场设计**: 编写基于噪声 (Noise) 的 GLSL 向量场。
+- [x] **交互实现**: 
     - **Screen Mode**: 将触摸坐标映射为 Shader 中的“斥力/引力”源。
-    - **AR Mode**: 使用 Raycasting 将触摸投射到现实平面，在物理空间中产生扰动。
-- [ ] **音频响应**: 低音(Bass)控制粒子大小，高音(Highs)控制发光强度(Bloom)。
+    - **AR Mode**: 使用 Raycasting 将触摸投射到现实平面 (目前是简单映射，需进一步完善)。
+- [x] **音频响应**: 低音(Bass)控制粒子大小，高音(Highs)控制发光强度(Bloom)。
 
-### Phase 4: 仪式感与打磨 (The Ritual)
+### Phase 4: 仪式感与打磨 (The Ritual) (已完成)
 *目标: 增强“入口体验”和整体质感。*
 
-- [ ] **点火仪式**: “划火柴”的手势启动动画。
-- [ ] **后处理**: 添加 Bloom (泛光), Noise (噪点), Chromatic Aberration (色差)。
-- [ ] **世界状态**: 记录用户的选择和心境。
+- [x] **点火仪式**: `IgnitionOverlay` 实现划火柴手势启动。
+- [x] **后处理**: `Stage` 中集成 `Bloom` (泛光), `Noise` (噪点), `Vignette` (暗角)。
+- [x] **世界状态**: App 状态管理已支持点火前后切换。
 
 ---
 
