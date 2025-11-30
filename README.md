@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Phosphorus
 
-# Run and deploy your AI Studio app
+**Phosphorus** is a digital hallucinogen and a container for subconscious projection. It invites users to light a virtual match and speak to the flame.
 
-This contains everything you need to run your app locally.
+As you speak, your voice drives a psychedelic, fluid-simulated background ("The Subconscious"), while the pixel-art matchstick ("The Reality Anchor") burns down in real-time.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1GlscYmyaRWihwDXLp7lMduMJ13muVOzL
+## Features
 
-## Run Locally
+- **Audio Reactivity**: The flame intensity and background visuals respond to microphone input.
+- **Pixel Art Physics**: Custom Metaball/Threshold rendering for a "marker pen" hand-drawn fire aesthetic.
+- **LSD Dream Emulator Style**: Low-res, high-saturation fluid dynamics inspired by retro glitch art.
+- **Generative Poetry**: Upon burnout, the app generates a "residue" card capturing the mood of the session.
 
-**Prerequisites:**  Node.js
+## Installation
 
+1. Clone the repository.
+2. Install dependencies (if converting to a local build, otherwise runs in browser).
+3. Open `index.html` in a modern browser or serve via `vite`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Credits
+
+Concept and Design: "A Digital Hallucinogen"
+Engineering: React + HTML5 Canvas

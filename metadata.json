@@ -1,5 +1,7 @@
 {
-  "name": "Pixel Art Marker Fire",
-  "description": "A physics-based interactive fire simulation with a hand-drawn marker aesthetic using threshold rendering.",
-  "requestFramePermissions": []
+  "name": "Phosphorus",
+  "description": "A digital hallucinogen and subconscious projection container. Uses audio reactivity to drive psychedelic fluid visuals anchored by a pixel-art matchstick.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
