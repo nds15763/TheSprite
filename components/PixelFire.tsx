@@ -1,12 +1,13 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { AudioData } from '../App';
 
-// Configuration for the visual style
-const CONFIG = {
-  width: 240, 
-  height: 320, 
-  scale: 2, 
-  colors: {
+  // Configuration for the visual style
+  // Balanced dimensions: wider flame, controlled height
+  const CONFIG = {
+    width: 280,  // Wider canvas for fuller flame
+    height: 500, // Increased height to prevent clipping 
+    scale: 2, 
+    colors: {
     core: { r: 255, g: 255, b: 240 }, 
     inner: { r: 255, g: 220, b: 50 },  
     mid: { r: 255, g: 100, b: 0 },    
@@ -14,6 +15,12 @@ const CONFIG = {
     edge: { r: 100, g: 0, b: 80 },    
     base: { r: 60, g: 80, b: 200 },   
   }
+};
+
+const ASPECT_RATIO = CONFIG.width / CONFIG.height;
+const DEFAULT_CONTAINER_SIZE = {
+  width: CONFIG.width * CONFIG.scale,
+  height: CONFIG.height * CONFIG.scale
 };
 
 interface Particle {
@@ -35,6 +42,22 @@ interface PixelFireProps {
 }
 
 const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelProgress, lockViewToFire = false }) => {
+  const getViewportSizedContainer = () => {
+    if (typeof window === 'undefined') return DEFAULT_CONTAINER_SIZE;
+
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const targetWidth = viewportHeight * ASPECT_RATIO;
+
+    if (targetWidth > viewportWidth) {
+      const adjustedHeight = viewportWidth / ASPECT_RATIO;
+      return { width: viewportWidth, height: adjustedHeight };
+    }
+
+    return { width: targetWidth, height: viewportHeight };
+  };
+
+  const [containerSize, setContainerSize] = useState(() => getViewportSizedContainer());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const frameIdRef = useRef<number>(0);
@@ -45,18 +68,21 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
   const createParticle = (x: number, y: number, audio: AudioData): Particle => {
     // Mids (Vocals/Music) drive the vertical speed (Height of flame)
     const energy = audio.mid; 
+    // Chaos affects horizontal velocity range
+    const chaosMod = audio.chaos || 0;
     
     return {
       x,
       y,
-      // X Turbulence is affected by Highs (Flicker)
-      vx: (Math.random() - 0.5) * (1.0 + audio.high * 4), 
-      // Y Speed (Height) affected by Mids
-      vy: -1.0 - Math.random() * (2.0 + energy * 4.5), 
-      life: 1.0 + energy * 0.8,
-      decay: 0.02 + Math.random() * 0.03,
-      // Radius swells with Bass
-      radius: (8 + Math.random() * 8) * (1 + audio.bass * 0.6), 
+      // X Turbulence: Moderate horizontal spread for fuller flame
+      vx: (Math.random() - 0.5) * (1.5 + audio.high * 2 + chaosMod * 2), 
+      // Y Speed: Moderate upward velocity - not too tall
+      vy: -1.5 - Math.random() * (1.5 + energy * 3.0), 
+      // Life: Moderate life for controlled height
+      life: 0.9 + energy * 0.8, 
+      decay: 0.015 + Math.random() * 0.02,
+      // Radius: Larger base radius for fuller flame
+      radius: (8 + Math.random() * 8) * (1 + audio.bass * 0.5), 
     };
   };
 
@@ -66,15 +92,22 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
       let particleCount = 3;
       
       // Music Reactivity: 
-      // If Bass hits hard, spawn more base particles
-      if (audioData.bass > 0.4) particleCount += 2;
+      // Energy Density affects particle count multiplier
+      // Vol affects particle count drastically
+      const volMod = audioData.vol * 3; // 0 to 3
+      particleCount = Math.max(1, Math.floor(particleCount + volMod * 2));
+
+      // If Chaos hits hard, spawn more base particles
+      if ((audioData.chaos || 0) > 0.3) particleCount += 2;
       // If Highs hit hard (snare/hi-hat), spawn sparky particles
-      if (audioData.high > 0.25) particleCount += 2;
+      if (audioData.high > 0.3) particleCount += 2;
       
       for(let i=0; i<particleCount; i++) {
         const sourceX = width / 2;
         const sourceY = currentTopY + 5; 
-        const spread = 14 * (1 - fuelProgress * 0.5); 
+        // Spread: Wider base spread for fuller flame
+        const chaosSpread = (audioData.chaos || 0) * 8;
+        const spread = 14 * (1 - fuelProgress * 0.5) + chaosSpread; 
         particlesRef.current.push(createParticle(sourceX + (Math.random()-0.5) * spread, sourceY, audioData));
       }
     }
@@ -108,7 +141,8 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
 
   const drawMatchstick = (ctx: CanvasRenderingContext2D, width: number, height: number, currentTopY: number) => {
     const cx = Math.floor(width / 2);
-    const startY = height / 2 + 20;
+    // Matchstick stick to the bottom, almost touching edge
+    const startY = height - 40; 
     const stickLength = 100;
     const stickWidth = 12; 
     const headWidth = 12;
@@ -157,7 +191,11 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
     const { colors } = CONFIG;
 
     // React to Volume: If loud, colors shift hotter
-    const shift = audioData.vol > 0.5 ? 20 : 0; 
+    const shift = (audioData.vol > 0.5) ? 20 : 0; 
+
+    // Metal Mode: If energy is super high, fire turns White Hot
+    // High Vol + High Energy + High Bass
+    const isMetalMode = (audioData.energy || 0) > 0.8 && audioData.vol > 0.8;
 
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
@@ -166,31 +204,46 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
         let r=0, g=0, b=0;
         let solid = false;
 
-        if (alpha > 200 - shift) { 
-          ({ r, g, b } = colors.core);
-          solid = true;
-        } else if (alpha > 140 - shift) { 
-          ({ r, g, b } = colors.inner);
-          solid = true;
-        } else if (alpha > 100 - shift) { 
-          ({ r, g, b } = colors.mid);
-          solid = true;
-        } else if (alpha > 60) { 
-          ({ r, g, b } = colors.outer);
-          solid = true;
-        } else if (alpha > 20) { 
-          const pixelIndex = i / 4;
-          const y = Math.floor(pixelIndex / width);
-          const visualFlameBaseY = lockViewToFire ? (height / 2 + 20) : currentTopY;
-          
-          if (y > visualFlameBaseY - 15) {
-             ({ r, g, b } = colors.base);
-             // Bass Interaction: If bass is strong, base turns bright neon violet
-             if (audioData.bass > 0.4) { r = 180; g = 50; b = 255; }
-          } else {
-             ({ r, g, b } = colors.edge);
-          }
-          solid = true;
+        // White Hot Core override for Metal
+        if (isMetalMode && alpha > 150) {
+            r = 255; g = 255; b = 255;
+            solid = true;
+        } else {
+            if (alpha > 200 - shift) { 
+              ({ r, g, b } = colors.core);
+              solid = true;
+            } else if (alpha > 140 - shift) { 
+              ({ r, g, b } = colors.inner);
+              solid = true;
+            } else if (alpha > 100 - shift) { 
+              ({ r, g, b } = colors.mid);
+              solid = true;
+            } else if (alpha > 60) { 
+              ({ r, g, b } = colors.outer);
+              solid = true;
+            } else if (alpha > 20) { 
+              const pixelIndex = i / 4;
+              const y = Math.floor(pixelIndex / width);
+              const visualFlameBaseY = lockViewToFire ? (height - 40) : currentTopY;
+              
+              // Improved Base Logic:
+              // 1. No hard cutoff: Use distance from base for smooth transition
+              // 2. No color flipping: Keep it blue, just brighter on bass
+              const distFromBase = Math.abs(y - visualFlameBaseY);
+              
+              if (distFromBase < 20) {
+                 ({ r, g, b } = colors.base);
+                 // Bass makes the blue brighter, not purple
+                 if (audioData.bass > 0.4) { 
+                    r = Math.min(r + 60, 100); 
+                    g = Math.min(g + 60, 140); 
+                    b = 255; 
+                 }
+              } else {
+                 ({ r, g, b } = colors.edge);
+              }
+              solid = true;
+            }
         }
 
         if (solid) {
@@ -213,7 +266,8 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
     if (!ctx) return;
 
     ctx.clearRect(0, 0, CONFIG.width, CONFIG.height);
-    const startY = CONFIG.height / 2 + 20;
+    // Matchstick stick to the bottom, almost touching edge
+    const startY = CONFIG.height - 40;
     const stickLength = 100;
     const currentTopY = startY + (stickLength * fuelProgress);
 
@@ -240,6 +294,13 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
   }, [isLit, audioData, fuelProgress, lockViewToFire]);
 
   useEffect(() => {
+    const updateSize = () => setContainerSize(getViewportSizedContainer());
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  useEffect(() => {
     frameIdRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameIdRef.current);
   }, [render]);
@@ -248,7 +309,7 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
   const checkIgnition = (x: number, y: number) => {
       if (isLit) return;
       const matchHeadX = CONFIG.width / 2;
-      const matchHeadY = CONFIG.height / 2 + 20;
+      const matchHeadY = CONFIG.height - 40;
       const dist = Math.sqrt(Math.pow(x - matchHeadX, 2) + Math.pow(y - matchHeadY, 2));
       if (dist < 40) onLight();
   };
@@ -292,7 +353,14 @@ const PixelFire: React.FC<PixelFireProps> = ({ isLit, onLight, audioData, fuelPr
   };
 
   return (
-    <div className="relative group cursor-pointer z-20" style={{ width: CONFIG.width * CONFIG.scale, height: CONFIG.height * CONFIG.scale }}>
+    <div
+      className="relative group cursor-pointer z-20"
+      style={{
+        width: containerSize.width,
+        height: containerSize.height,
+        maxHeight: '100vh'
+      }}
+    >
       <canvas
         ref={canvasRef}
         width={CONFIG.width}

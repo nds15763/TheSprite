@@ -21,7 +21,7 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     const render = () => {
@@ -35,13 +35,18 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
       }
 
       // Music Reactivity Logic:
-      // Time flows faster with Mids (Melody speed)
-      timeRef.current += 0.02 + (audioData.mid * 0.15); 
+      // Time flows faster with Energy (Not individual transients)
+      // Base speed 0.02 -> Smooth idle flow
+      timeRef.current += 0.02 + (audioData.energy * 0.1); 
       const t = timeRef.current;
       
       const imgData = ctx.getImageData(0, 0, CONFIG.width, CONFIG.height);
       const data = imgData.data;
 
+      // Chaos Effect: Soft Glow instead of Strobe
+      // 如果能量很高，只是让背景稍微变亮一点，而不是疯狂闪烁
+      const isHighEnergy = (audioData.energy || 0) > 0.6;
+      
       for (let x = 0; x < CONFIG.width; x++) {
         for (let y = 0; y < CONFIG.height; y++) {
           const index = (x + y * CONFIG.width) * 4;
@@ -49,9 +54,9 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
           const u = x / CONFIG.width;
           const v = y / CONFIG.height;
 
-          // Bass distorts the space (The "Thump")
-          // If Bass > 0.5, the warp factor jumps
-          const bassWarp = audioData.bass * 20.0;
+          // Energy distorts the space (The "Vibe")
+          // Replaced instant Bass Warp with smoothed Energy Warp
+          const energyWarp = audioData.energy * 15.0;
           
           let value = Math.sin(u * 5.0 + t);
           value += Math.sin((v * 5.0 + t) * 0.5);
@@ -61,7 +66,7 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
           const cy = v + 0.5 * Math.cos(t * 0.2);
           
           // The core fluid formula
-          value += Math.sin(Math.sqrt(cx*cx + cy*cy + 1.0) * (5.0 + bassWarp));
+          value += Math.sin(Math.sqrt(cx*cx + cy*cy + 1.0) * (5.0 + energyWarp));
 
           // Color Mapping
           // Base: Deep Blue
@@ -70,20 +75,28 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
           let b = 60 + Math.sin(value + t * 0.5) * 40;
 
           // Reactivity: 
-          // 1. Bass turns the world Purple/Red (Deep energy)
-          if (audioData.bass > 0.15) {
-             r += audioData.bass * 100;
-             b += audioData.bass * 50;
+          // 1. Energy turns the world Purple/Red (Atmosphere shift)
+          if (audioData.energy > 0.2) {
+             r += audioData.energy * 80;
+             b += audioData.energy * 40;
           }
 
           // 2. Highs add bright Cyan/White sparks (Electric energy)
-          if (audioData.high > 0.25) {
+          // KEPT for slight sparkle, but threshold raised
+          if (audioData.energy > 0.3 && audioData.high > 0.4) {
              const spark = Math.sin(value * 10.0 + t * 5.0);
              if (spark > 0.9) {
                 r += 100 * audioData.high;
                 g += 150 * audioData.high;
                 b += 200 * audioData.high;
              }
+          }
+          
+          // 3. Soft Glow (Heavy Metal / High Energy)
+          if (isHighEnergy) {
+             r = Math.min(r + 40, 255);
+             g = Math.min(g + 40, 255);
+             b = Math.min(b + 60, 255);
           }
 
           data[index] = r;
@@ -96,7 +109,8 @@ const VisionBackground: React.FC<VisionBackgroundProps> = ({ audioData, isActive
       ctx.putImageData(imgData, 0, 0);
 
       // Random "Glitch" artifacts on snare/clap (Highs)
-      if (audioData.high > 0.25 && Math.random() > 0.7) {
+      // Only glitch if Energy is also high
+      if (audioData.energy > 0.4 && audioData.high > 0.3 && Math.random() > 0.7) {
          const sliceHeight = Math.floor(Math.random() * 10);
          const sliceY = Math.floor(Math.random() * (CONFIG.height - sliceHeight));
          const offset = Math.floor((Math.random() - 0.5) * 15); // Horizontal shift

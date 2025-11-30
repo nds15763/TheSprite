@@ -44,12 +44,25 @@ const App: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const animationRef = useRef<number>(0);
+  const prevVolRef = useRef<number>(0);
+  const prevEnergyRef = useRef<number>(0);
 
   // Initialize Audio Logic
   const startAudioListener = async () => {
     try {
       if (!audioContextRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Disable audio processing features that might filter out music (Echo Cancellation, Noise Suppression)
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          } 
+        });
+        
+        const track = stream.getAudioTracks()[0];
+        console.log("Microphone connected:", track.label);
+
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const analyser = audioCtx.createAnalyser();
         const source = audioCtx.createMediaStreamSource(stream);
@@ -94,7 +107,7 @@ const App: React.FC = () => {
     
     // Boost bass sensitivity
     const rawBass = (bassSum / bassCount) / 255;
-    const bass = Math.min(rawBass * 2.5, 1);
+    const bass = Math.min(rawBass * 1.5, 1);
 
     // Mids: 250Hz - 2kHz (approx bins 13-100)
     let midSum = 0;
@@ -105,7 +118,7 @@ const App: React.FC = () => {
     for (let i = midStart; i < midEnd; i++) midSum += dataArrayRef.current[i];
     
     const rawMid = (midSum / midCount) / 255;
-    const mid = Math.min(rawMid * 2.5, 1);
+    const mid = Math.min(rawMid * 1.5, 1);
 
     // Highs: 2kHz+ (approx bins 101+)
     let highSum = 0;
@@ -118,26 +131,36 @@ const App: React.FC = () => {
     for (let i = highStart; i < highEnd; i++) highSum += dataArrayRef.current[i];
     
     const rawHigh = (highSum / highCount) / 255;
-    const high = Math.min(rawHigh * 3.0, 1); // Highs need more boost usually
+    const high = Math.min(rawHigh * 2.0, 1); // Highs need more boost usually
 
     // Energy Density: Average of all bands
-    // We can use the raw sums
+    // We use a rolling average (Exponential Moving Average) for smoothness
+    // Get previous energy from ref or default to 0
+    const prevEnergy = prevEnergyRef.current;
+    
     const totalSum = bassSum + midSum + highSum;
     const totalCount = bassCount + midCount + highCount;
-    const energy = Math.min((totalSum / totalCount) / 255 * 2.0, 1); // Boosted average
+    const rawEnergy = (totalSum / totalCount) / 255;
+    
+    // Smooth Factor: 0.05 means it takes ~20 frames (0.3s) to catch up
+    // This creates the "Atmosphere" lag
+    const energy = prevEnergy * 0.95 + rawEnergy * 1.5 * 0.05;
+    
+    // Store for next frame
+    prevEnergyRef.current = energy;
 
     // Chaos: Transient detection (difference from last frame volume)
     // We need a ref to store previous volume
-    const prevVol = (animationRef.current as any).prevVol || 0;
+    const prevVol = prevVolRef.current;
     const currentVol = (bass + mid + high) / 3;
     let chaos = Math.abs(currentVol - prevVol) * 10.0; // Amplify changes
     chaos = Math.min(chaos, 1);
     
     // Store for next frame
-    (animationRef.current as any).prevVol = currentVol;
+    prevVolRef.current = currentVol;
 
     // Overall Volume
-    const vol = Math.min(currentVol * 2.5, 1);
+    const vol = Math.min(currentVol * 1.5, 1);
 
     // React State update
     // We update state for React rendering, but for 60fps canvas, 
@@ -151,30 +174,38 @@ const App: React.FC = () => {
       chaos
     });
     
+    // Debug Log (Throttled)
+    if (Math.random() > 0.98) {
+       console.log("Audio Stats:", { 
+          vol: vol.toFixed(2), 
+          energy: energy.toFixed(2), 
+          ctxState: audioContextRef.current?.state,
+          micActive: audioContextRef.current?.state === 'running'
+       });
+    }
+    
     animationRef.current = requestAnimationFrame(updateAudioAnalysis);
   };
 
-  // Fuel Logic
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (phase === 'BURNING') {
-      interval = setInterval(() => {
-        setFuel(prev => {
-          if (prev <= 0) {
-             setPhase('RESIDUE');
-             setResidueText(generateResidue());
-             return 0;
-          }
-          const baseBurn = 0.028;
-          // Burning reacts to overall volume intensity
-          const burnRate = baseBurn * (1 + audioData.vol * 2); 
-          
-          return prev - burnRate;
-        });
-      }, 50);
-    }
-    return () => clearInterval(interval);
-  }, [phase, audioData.vol]);
+  // Fuel Logic - Disabled: Fire burns forever now
+  // useEffect(() => {
+  //   let interval: ReturnType<typeof setInterval>;
+  //   if (phase === 'BURNING') {
+  //     interval = setInterval(() => {
+  //       setFuel(prev => {
+  //         if (prev <= 0) {
+  //            setPhase('RESIDUE');
+  //            setResidueText(generateResidue());
+  //            return 0;
+  //         }
+  //         const baseBurn = 0.028;
+  //         const burnRate = baseBurn * (1 + audioData.vol * 2); 
+  //         return prev - burnRate;
+  //       });
+  //     }, 50);
+  //   }
+  //   return () => clearInterval(interval);
+  // }, [phase, audioData.vol]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -194,14 +225,15 @@ const App: React.FC = () => {
   const handleRestart = () => {
     setPhase('IDLE');
     setFuel(100);
-    setAudioData({ vol: 0, bass: 0, mid: 0, high: 0 });
+    setAudioData({ vol: 0, bass: 0, mid: 0, high: 0, energy: 0, chaos: 0 });
   };
 
   // Helper for dynamic transforms
   const getTransformClass = () => {
     if (phase === 'RESIDUE') return 'scale-50 opacity-0';
     if (phase === 'BURNING') {
-       return 'scale-[1.05] translate-y-[32vh]'; 
+       // Burning mode: No translate needed since flame is internally at bottom
+       return 'scale-[1.0]'; 
     }
     return 'scale-100 translate-y-0 opacity-100'; // IDLE
   };
@@ -216,10 +248,10 @@ const App: React.FC = () => {
       />
 
       {/* 2. Main Content Layer */}
-      <div className="relative z-10 flex flex-col items-center">
+      <div className="relative z-10 flex flex-col items-center justify-end min-h-screen pb-0">
         
         {/* The Anchor (Matchstick) */}
-        <div className={`transition-transform duration-[2000ms] ease-in-out ${getTransformClass()}`}>
+        <div className={`transition-all duration-[2000ms] ease-in-out ${getTransformClass()}`}>
            <PixelFire 
               isLit={phase === 'BURNING'} 
               onLight={handleIgnite}
@@ -244,7 +276,7 @@ const App: React.FC = () => {
               <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-xs text-center animate-fade-in shadow-2xl transform rotate-1">
                  <div className="w-full h-32 bg-zinc-950 mb-6 overflow-hidden relative">
                     {/* Residue snapshot uses current audio mood */}
-                    <VisionBackground audioData={{vol: 0.5, bass: 0.8, mid: 0.2, high: 0.1}} isActive={true} />
+                    <VisionBackground audioData={{vol: 0.5, bass: 0.8, mid: 0.2, high: 0.1, energy: 0.6, chaos: 0.3}} isActive={true} />
                     <div className="absolute inset-0 bg-black/20" />
                  </div>
                  
