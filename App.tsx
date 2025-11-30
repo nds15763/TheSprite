@@ -134,10 +134,9 @@ const App: React.FC = () => {
     if (phase === 'RESIDUE') return 'scale-50 opacity-0';
     if (phase === 'BURNING') {
        // Updated Zoom and Position:
-       // Scale 1.3: Keeps the fire distinct but not overwhelming
-       // Translate Y 45vh: Pushed further down to ensure the stick is completely off-screen
-       // even on taller screens, leaving only the flame tip visible at the bottom.
-       return 'scale-[1.3] translate-y-[45vh]'; 
+       // Scale 1.05: Reduced from 1.3 to zoom out slightly (further away)
+       // Translate Y 32vh: Raised from 45vh so the bottom of the flame (blue/purple base) is fully visible
+       return 'scale-[1.05] translate-y-[32vh]'; 
     }
     return 'scale-100 translate-y-0 opacity-100'; // IDLE
   };
