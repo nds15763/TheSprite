@@ -1,0 +1,5 @@
+{
+  "name": "Pixel Art Marker Fire",
+  "description": "A physics-based interactive fire simulation with a hand-drawn marker aesthetic using threshold rendering.",
+  "requestFramePermissions": []
+}
