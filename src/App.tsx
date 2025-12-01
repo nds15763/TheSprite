@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { VISUALIZER_PRESETS, VisualizerKey } from './components/visualizers';
 import { Stage, xrStore } from './components/stage/Stage';
 import IgnitionOverlay from './components/overlay/IgnitionOverlay';
+import { KeepAwake } from '@capacitor-community/keep-awake';
 
 const App: React.FC = () => {
   const { audioData, recentEvents, startAudioListener } = useAudioEngine();
+  
+  // Initialize KeepAwake
+  useEffect(() => {
+    const keepScreenOn = async () => {
+      try {
+        await KeepAwake.keepAwake();
+      } catch (err) {
+        // Fallback for web or if plugin fails
+        console.log('KeepAwake not supported:', err);
+      }
+    };
+    keepScreenOn();
+  }, []);
   
   // State to track current visualizer
   const [currentStyle, setCurrentStyle] = useState<VisualizerKey>('TOUCH_FLOW');
@@ -54,7 +68,10 @@ const App: React.FC = () => {
       )}
 
       {/* === UI Layer (Fade in after ignition) === */}
-      <div className={`absolute top-4 left-4 z-30 flex flex-col gap-2 transition-opacity duration-1000 delay-1000 ${hasIgnited ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div 
+        className={`absolute left-4 z-30 flex flex-col gap-2 transition-opacity duration-1000 delay-1000 ${hasIgnited ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ top: 'max(1.5rem, env(safe-area-inset-top) + 1.5rem)' }}
+      >
         <button 
           onClick={(e) => { e.stopPropagation(); setIsOverlayOpen(!isOverlayOpen); }}
           className="text-zinc-500 hover:text-white font-mono text-xs uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded backdrop-blur-sm w-32"
