@@ -31,7 +31,7 @@ declare global {
 const DEFAULT_THEME: ThemeConfig = {
   name: "Ocean Blue",
   skyColor: "#f5f5f5",
-  waterColor: "#0066aa",
+  waterColor: "#0040c8",
   waterOpacity: 0.9,
   boatColor: "#ffcc00",
   waveHeight: 0.3,
@@ -234,13 +234,13 @@ const WaterVolume = ({ theme, tilt, setWaterRot }: { theme: ThemeConfig, tilt: {
         <mesh ref={meshRef} geometry={geometry}>
             <meshPhysicalMaterial
                 color={theme.waterColor}
-                transmission={0.2}
-                opacity={0.9}
+                transmission={0.1}
+                opacity={0.95}
                 transparent
                 roughness={0.3}
                 metalness={0.0}
                 ior={1.33}
-                thickness={1.0}
+                thickness={0.5}
                 flatShading={true}
             />
         </mesh>
@@ -309,8 +309,7 @@ const Scene = ({ theme }: { theme: ThemeConfig }) => {
       {/* The Dynamic Water Block */}
       <WaterVolume theme={theme} tilt={tilt} setWaterRot={setWaterRot} />
       {/* Background */}
-      <color attach="background" args={["#f5f5f5"]} />
-      <fog attach="fog" args={["#f5f5f5", 10, 40]} />
+      <color attach="background" args={["#ffffff"]} />
     </>
   );
 };
