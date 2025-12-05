@@ -2,9 +2,9 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { useFrame, useThree, extend } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three-stdlib';
-import { VisualizerProps } from '../../types/audio';
-import { simulationFragmentShader } from '../../shaders/simulationShaders';
-import { renderVertexShader, renderFragmentShader } from '../../shaders/renderShaders';
+import { ToyProps } from '../core/types';
+import { simulationFragmentShader } from '../shaders/simulationShaders';
+import { renderVertexShader, renderFragmentShader } from '../shaders/renderShaders';
 
 // Extend Three.js with custom buffer geometry if needed, 
 // but standard BufferGeometry is fine.
@@ -12,7 +12,7 @@ import { renderVertexShader, renderFragmentShader } from '../../shaders/renderSh
 const TEXTURE_WIDTH = 128; // 128x128 = 16,384 particles
 const TOTAL_PARTICLES = TEXTURE_WIDTH * TEXTURE_WIDTH;
 
-const TouchFlow: React.FC<VisualizerProps> = ({ data, isActive }) => {
+const TouchFlow: React.FC<ToyProps> = ({ data, isActive }) => {
   const { gl, size } = useThree();
   const gpuCompute = useRef<GPUComputationRenderer | null>(null);
   const positionVariable = useRef<any>(null);
@@ -142,4 +142,3 @@ const TouchFlow: React.FC<VisualizerProps> = ({ data, isActive }) => {
 };
 
 export default TouchFlow;
-

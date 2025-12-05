@@ -1,120 +1,123 @@
 import React, { useState, useEffect } from 'react';
 import { useAudioEngine } from './hooks/useAudioEngine';
-import { VISUALIZER_PRESETS, VisualizerKey } from './components/visualizers';
+import { getToy } from './toys/registry';
 import { Stage, xrStore } from './components/stage/Stage';
-import IgnitionOverlay from './components/overlay/IgnitionOverlay';
+import LaunchScreen from './ui/LaunchScreen';
+import ToyDrawer from './ui/ToyDrawer';
+import { usePreferences } from './core/storage/usePreferences';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 
 const App: React.FC = () => {
   const { audioData, recentEvents, startAudioListener } = useAudioEngine();
+  const { getLastToyId, setLastToyId } = usePreferences();
   
-  // Initialize KeepAwake
+  // 状态管理
+  const [showLaunchScreen, setShowLaunchScreen] = useState(true);
+  const [currentToyId, setCurrentToyId] = useState<string>(getLastToyId());
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
+  
+  // 保持屏幕常亮
   useEffect(() => {
     const keepScreenOn = async () => {
       try {
         await KeepAwake.keepAwake();
       } catch (err) {
-        // Fallback for web or if plugin fails
         console.log('KeepAwake not supported:', err);
       }
     };
     keepScreenOn();
   }, []);
-  
-  // State to track current visualizer
-  const [currentStyle, setCurrentStyle] = useState<VisualizerKey>('TOUCH_FLOW');
-  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-  const [hasIgnited, setHasIgnited] = useState(false); // 增加点火状态
 
-  // Get current config
-  const activeConfig = VISUALIZER_PRESETS[currentStyle];
-  const CurrentVisualizer = activeConfig.component;
-
-  const handleIgnite = () => {
-    setHasIgnited(true);
+  // 启动屏完成后自动开始音频
+  const handleLaunchComplete = () => {
+    setShowLaunchScreen(false);
+    setIsStarted(true);
     startAudioListener();
   };
+
+  // 切换玩具
+  const handleSelectToy = (toyId: string) => {
+    setCurrentToyId(toyId);
+    setLastToyId(toyId);
+  };
+
+  // 获取当前玩具配置
+  const currentToy = getToy(currentToyId);
+  if (!currentToy) {
+    return <div className="flex items-center justify-center h-screen text-white">
+      玩具未找到: {currentToyId}
+    </div>;
+  }
+
+  const CurrentToyComponent = currentToy.component;
 
   return (
     <div className="relative w-full h-screen bg-zinc-950 overflow-hidden select-none touch-none">
       
-      {/* === Ignition Layer (The Ritual) === */}
-      {!hasIgnited && (
-         <IgnitionOverlay onIgnite={handleIgnite} />
+      {/* === 启动屏 === */}
+      {showLaunchScreen && (
+        <LaunchScreen onComplete={handleLaunchComplete} />
       )}
 
-      {/* === 3D Layer (Always present, but empty if not in 3D mode) === */}
-      <div className={`absolute inset-0 z-0 transition-opacity duration-1000 ${hasIgnited ? 'opacity-100' : 'opacity-0'}`}>
-        <Stage>
-          {activeConfig.type === '3d' && (
-            <CurrentVisualizer 
+      {/* === 3D 渲染层 (React Three Fiber) === */}
+      {currentToy.type === '3d' && (
+        <div className={`absolute inset-0 z-0 transition-opacity duration-1000 ${isStarted ? 'opacity-100' : 'opacity-0'}`}>
+          <Stage>
+            <CurrentToyComponent 
               data={audioData}
               events={recentEvents}
-              isActive={hasIgnited}
+              isActive={isStarted}
             />
-          )}
-        </Stage>
-      </div>
-
-      {/* === 2D Layer (HTML Canvas) === */}
-      {activeConfig.type === '2d' && (
-        <div className={`absolute inset-0 z-10 flex items-center justify-center pointer-events-none transition-opacity duration-1000 ${hasIgnited ? 'opacity-100' : 'opacity-0'}`}>
-           <CurrentVisualizer 
-              data={audioData}
-              events={recentEvents}
-              isActive={hasIgnited}
-           />
+          </Stage>
         </div>
       )}
 
-      {/* === UI Layer (Fade in after ignition) === */}
+      {/* === 2D 渲染层 (HTML Canvas) === */}
+      {currentToy.type === '2d' && (
+        <div className={`absolute inset-0 z-10 flex items-center justify-center pointer-events-none transition-opacity duration-1000 ${isStarted ? 'opacity-100' : 'opacity-0'}`}>
+          <CurrentToyComponent 
+            data={audioData}
+            events={recentEvents}
+            isActive={isStarted}
+          />
+        </div>
+      )}
+
+      {/* === UI层 === */}
       <div 
-        className={`absolute left-4 z-30 flex flex-col gap-2 transition-opacity duration-1000 delay-1000 ${hasIgnited ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        style={{ top: 'max(1.5rem, env(safe-area-inset-top) + 1.5rem)' }}
+        className={`absolute z-30 flex gap-2 transition-opacity duration-1000 delay-500 ${isStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ 
+          left: 'max(1rem, env(safe-area-inset-left) + 1rem)',
+          top: 'max(1rem, env(safe-area-inset-top) + 1rem)',
+        }}
       >
+        {/* 玩具选择按钮 */}
         <button 
-          onClick={(e) => { e.stopPropagation(); setIsOverlayOpen(!isOverlayOpen); }}
-          className="text-zinc-500 hover:text-white font-mono text-xs uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded backdrop-blur-sm w-32"
+          onClick={() => setIsDrawerOpen(true)}
+          className="text-white hover:text-zinc-300 font-mono text-xs uppercase tracking-widest border border-zinc-700 bg-zinc-900/80 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg transition-all active:scale-95"
         >
-          {isOverlayOpen ? 'Close' : 'Visuals'}
+          {currentToy.icon} {currentToy.name}
         </button>
         
-        {/* AR Button (Only for 3D modes) */}
-        {activeConfig.type === '3d' && (
-           <button
-              onClick={(e) => { e.stopPropagation(); xrStore.enterAR(); }}
-              className="text-emerald-500 hover:text-emerald-300 font-mono text-xs uppercase tracking-widest border border-emerald-900 bg-emerald-950/30 px-3 py-1 rounded backdrop-blur-sm w-32"
-           >
-              Enter AR
-           </button>
-        )}
-
-        {isOverlayOpen && (
-          <div className="flex flex-col gap-2 mt-2 animate-fade-in w-48">
-            {Object.entries(VISUALIZER_PRESETS).map(([key, config]) => (
-              <button 
-                key={key}
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setCurrentStyle(key as VisualizerKey); 
-                }}
-                className={`text-left px-3 py-2 rounded border transition-all duration-300 ${
-                  currentStyle === key 
-                    ? 'bg-zinc-800 border-zinc-600 text-white' 
-                    : 'bg-zinc-950/50 border-zinc-900 text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                   <span className="font-mono text-xs font-bold">{config.name}</span>
-                   <span className="text-[9px] px-1 bg-zinc-800 rounded text-zinc-400">{config.type}</span>
-                </div>
-                <div className="text-[10px] opacity-60 truncate">{config.description}</div>
-              </button>
-            ))}
-          </div>
+        {/* AR按钮 (仅3D模式) */}
+        {currentToy.type === '3d' && (
+          <button
+            onClick={() => xrStore.enterAR()}
+            className="text-emerald-400 hover:text-emerald-300 font-mono text-xs uppercase tracking-widest border border-emerald-800 bg-emerald-950/50 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg transition-all active:scale-95"
+          >
+            AR
+          </button>
         )}
       </div>
 
+      {/* === 玩具选择抽屉 === */}
+      <ToyDrawer 
+        isOpen={isDrawerOpen}
+        currentToyId={currentToyId}
+        onSelectToy={handleSelectToy}
+        onClose={() => setIsDrawerOpen(false)}
+      />
     </div>
   );
 };

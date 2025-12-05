@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { VisualizerProps } from '../../types/audio';
+import { ToyProps } from '../core/types';
 
-const FluidDream: React.FC<VisualizerProps> = ({ data, isActive }) => {
+const FluidDream: React.FC<ToyProps> = ({ data, isActive }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timeRef = useRef<number>(0);
   const frameIdRef = useRef<number>(0);
@@ -140,4 +140,3 @@ const FluidDream: React.FC<VisualizerProps> = ({ data, isActive }) => {
 };
 
 export default FluidDream;
-

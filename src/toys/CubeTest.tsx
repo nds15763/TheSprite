@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Mesh } from 'three';
-import { VisualizerProps } from '../../types/audio';
+import { ToyProps } from '../core/types';
 
-const CubeTest: React.FC<VisualizerProps> = ({ data }) => {
+const CubeTest: React.FC<ToyProps> = ({ data }) => {
   const meshRef = useRef<Mesh>(null);
 
   useFrame((state, delta) => {
@@ -40,4 +40,3 @@ const CubeTest: React.FC<VisualizerProps> = ({ data }) => {
 };
 
 export default CubeTest;
-

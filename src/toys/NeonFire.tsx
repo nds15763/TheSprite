@@ -1,5 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { VisualizerProps, AudioData } from '../../types/audio';
+import { ToyProps } from '../core/types';
+
+// AudioData interface for this component
+interface AudioData {
+  bass: number;
+  mid: number;
+  high: number;
+  vol: number;
+  energy: number;
+  chaos?: number;
+}
 
 // Configuration for the visual style
 const CONFIG = {
@@ -32,7 +42,7 @@ interface Particle {
   radius: number;
 }
 
-const NeonFire: React.FC<VisualizerProps> = ({ data, isActive }) => {
+const NeonFire: React.FC<ToyProps> = ({ data, isActive }) => {
   const getViewportSizedContainer = () => {
     if (typeof window === 'undefined') return DEFAULT_CONTAINER_SIZE;
     const viewportHeight = window.innerHeight;
@@ -218,4 +228,3 @@ const NeonFire: React.FC<VisualizerProps> = ({ data, isActive }) => {
 };
 
 export default NeonFire;
-
