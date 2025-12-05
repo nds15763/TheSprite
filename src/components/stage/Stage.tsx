@@ -35,7 +35,7 @@ const Effects = () => {
          modulationOffset={0}
       />
       <Noise opacity={0.05} /> 
-      <Vignette eskil={false} offset={0.1} darkness={1.1} /> 
+      {/* <Vignette eskil={false} offset={0.1} darkness={1.1} /> */}
     </EffectComposer>
   );
 };
